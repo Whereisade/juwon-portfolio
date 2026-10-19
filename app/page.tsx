@@ -16,12 +16,15 @@ const filters = [
 const heroImage = "/images/juwonmain.jpg";
 const aboutImage =
   "https://images.pexels.com/photos/9615249/pexels-photo-9615249.jpeg?auto=compress&cs=tinysrgb&w=1280";
+const formSubmitEmail = process.env.NEXT_PUBLIC_FORMSUBMIT_EMAIL?.trim() ?? "";
+const whatsappNumber = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "").replace(/\D/g, "");
 
 export default function HomePage() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [formStatus, setFormStatus] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const modalCloseRef = useRef<HTMLButtonElement>(null);
   const lastTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -49,11 +52,34 @@ export default function HomePage() {
     };
   }, [activeProject]);
 
-  function handleContactSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleContactSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setFormStatus(
-      "This preview form is not connected to an email or form service yet. Connect an endpoint to receive enquiries.",
-    );
+    const form = event.currentTarget;
+    if (!formSubmitEmail) {
+      setFormStatus("The enquiry form is not configured yet. Please contact us on WhatsApp.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFormStatus("");
+    try {
+      const response = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(formSubmitEmail)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          ...Object.fromEntries(new FormData(form).entries()),
+          _subject: "New portfolio enquiry",
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.success === false || result.success === "false") throw new Error("FormSubmit rejected the enquiry");
+      form.reset();
+      setFormStatus("Thanks for your enquiry. Your message has been sent.");
+    } catch {
+      setFormStatus("We couldn't send your message. Please try again or contact us on WhatsApp.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function closeMobileMenu() {
@@ -361,12 +387,15 @@ export default function HomePage() {
               >
                 Have a drawing, model, or design-support requirement? Send a short note to begin the conversation.
               </p>
-              <p
+              <a
                 className="canva-text mt-8 border-l-2 border-[#415d73] pl-4 text-sm leading-6 text-[#41515c]"
                 style={{ color: "rgb(65, 81, 92)", fontWeight: 400, fontStyle: "normal", fontSize: 14, lineHeight: 1.5 }}
+                href={whatsappNumber ? `https://wa.me/${whatsappNumber}` : undefined}
+                target={whatsappNumber ? "_blank" : undefined}
+                rel={whatsappNumber ? "noreferrer" : undefined}
               >
-                Connect your preferred contact method in Canva to tailor how you would like clients to reach you.
-              </p>
+                WhatsApp {whatsappNumber ? "↗" : "(number not configured)"}
+              </a>
             </div>
 
             <div className="border-t border-[#aeb8bd] bg-[#f3f2ee] px-5 py-12 sm:px-8 md:border-l md:border-t-0 md:px-12 md:py-20">
@@ -384,10 +413,10 @@ export default function HomePage() {
                     <label className="canva-text mb-2 block text-sm font-bold" htmlFor="contact-message" style={{ color: "rgb(23, 33, 43)", fontWeight: 700, fontStyle: "normal", fontSize: 14 }}>Message</label>
                     <textarea id="contact-message" name="message" rows={5} required className="w-full border border-[#8b989e] bg-transparent p-3" />
                   </div>
-                  <button id="submit-button" className="canva-button bg-[#415d73] px-5 py-3 text-sm font-bold text-white disabled:opacity-60" type="submit" style={{ background: "rgb(65, 93, 115)", color: "rgb(255, 255, 255)", fontWeight: 700, fontStyle: "normal", fontSize: 16 }}>
-                    Send enquiry
+                  <button id="submit-button" disabled={isSubmitting || !formSubmitEmail} className="canva-button bg-[#415d73] px-5 py-3 text-sm font-bold text-white disabled:opacity-60" type="submit" style={{ background: "rgb(65, 93, 115)", color: "rgb(255, 255, 255)", fontWeight: 700, fontStyle: "normal", fontSize: 16 }}>
+                    {isSubmitting ? "Sending…" : "Send enquiry"}
                   </button>
-                  <p className="min-h-6 text-sm font-medium text-[#41515c]" aria-live="polite">{formStatus}</p>
+                  <p className="min-h-6 text-sm font-medium text-[#41515c]" aria-live="polite">{formStatus || (!formSubmitEmail ? "Form is awaiting recipient email configuration." : "")}</p>
                 </div>
               </form>
             </div>
